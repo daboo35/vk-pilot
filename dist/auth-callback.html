@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VK OAuth Callback</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+      }
+      .container {
+        background: rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
+        max-width: 400px;
+      }
+      .spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      h1 { font-size: 24px; margin-bottom: 10px; }
+      p { font-size: 14px; opacity: 0.8; }
+      .error { background: rgba(255,0,0,0.2); border: 1px solid rgba(255,0,0,0.4); }
+      .success { background: rgba(0,255,0,0.2); border: 1px solid rgba(0,255,0,0.4); }
+    </style>
+  </head>
+  <body>
+    <div class="container" id="container">
+      <div class="spinner"></div>
+      <h1>Обработка авторизации...</h1>
+      <p>Пожалуйста, подождите</p>
+    </div>
+
+    <script>
+      // VK OAuth Callback Handler
+      // Получаем code из URL и отправляем его на backend для обмена на токен
+
+      function getQueryParam(name) {
+        const params = new URLSearchParams(window.location.search);
+        return params.get(name);
+      }
+
+      async function handleCallback() {
+        const code = getQueryParam('code');
+        const state = getQueryParam('state');
+        const error = getQueryParam('error');
+        const errorReason = getQueryParam('error_reason');
+        const container = document.getElementById('container');
+
+        if (error) {
+          container.className = 'container error';
+          container.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 20px;">❌</div>
+            <h1>Ошибка авторизации</h1>
+            <p>${errorReason || error}</p>
+            <p style="margin-top: 20px; font-size: 12px;">Перенаправление через 3 секунды...</p>
+          `;
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
+          return;
+        }
+
+        if (!code) {
+          container.className = 'container error';
+          container.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 20px;">❌</div>
+            <h1>Код не получен</h1>
+            <p>VK не вернул код авторизации</p>
+            <p style="margin-top: 20px; font-size: 12px;">Перенаправление через 3 секунды...</p>
+          `;
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
+          return;
+        }
+
+        // Show success state
+        container.className = 'container success';
+        container.innerHTML = `
+          <div style="font-size: 48px; margin-bottom: 20px;">✅</div>
+          <h1>Авторизация успешна!</h1>
+          <p>Обмен кода на токен...</p>
+        `;
+
+        // Send code to backend via opener window (if popup) or directly
+        try {
+          // Try to communicate with opener window
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({
+              type: 'VK_OAUTH_CALLBACK',
+              code: code,
+              state: state,
+            }, window.location.origin);
+            
+            setTimeout(() => {
+              window.close();
+            }, 1000);
+            return;
+          }
+
+          // If not a popup, redirect to app with code
+          window.location.href = `/?vk_code=${encodeURIComponent(code)}`;
+          
+        } catch (err) {
+          container.className = 'container error';
+          container.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 20px;">❌</div>
+            <h1>Ошибка обработки</h1>
+            <p>${err.message}</p>
+          `;
+        }
+      }
+
+      // Handle on page load
+      handleCallback();
+    </script>
+  </body>
+</html>
