@@ -1,33 +1,29 @@
-import { StrictMode, useEffect } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
-import vkBridge from '@vkontakte/vk-bridge';
+import { init as initVKBridge } from './api/vk-bridge';
 import './index.css';
 import { App } from './App';
 
-// Компонент для инициализации VK Bridge
-function VKBridgeInit({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    // Инициализируем VK Bridge только если запущены внутри VK
-    if (vkBridge.isWebView()) {
-      console.log('[VK Bridge] Запуск внутри VK, инициализация...');
-      vkBridge.send('VKWebAppInit')
-        .then(() => console.log('[VK Bridge] Инициализация успешна'))
-        .catch((err) => console.warn('[VK Bridge] Ошибка инициализации:', err));
-    } else {
-      console.log('[VK Bridge] Запуск вне VK, инициализация пропущена');
-    }
-  }, []);
+/**
+ * Инициализация приложения перед рендером
+ */
+async function bootstrap() {
+  try {
+    // Инициализируем VK Bridge до рендера приложения
+    await initVKBridge();
+  } catch (error) {
+    console.error('[Bootstrap] Ошибка инициализации:', error);
+  }
 
-  return <>{children}</>;
+  // Рендерим приложение
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <HashRouter>
+        <App />
+      </HashRouter>
+    </StrictMode>
+  );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <HashRouter>
-      <VKBridgeInit>
-        <App />
-      </VKBridgeInit>
-    </HashRouter>
-  </StrictMode>
-);
+bootstrap();

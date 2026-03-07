@@ -2,7 +2,7 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>VK OAuth Callback</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -22,6 +22,7 @@
         padding: 40px;
         text-align: center;
         max-width: 400px;
+        width: 90%;
       }
       .spinner {
         width: 50px;
@@ -39,6 +40,7 @@
       p { font-size: 14px; opacity: 0.8; }
       .error { background: rgba(255,0,0,0.2); border: 1px solid rgba(255,0,0,0.4); }
       .success { background: rgba(0,255,0,0.2); border: 1px solid rgba(0,255,0,0.4); }
+      .icon { font-size: 48px; margin-bottom: 20px; display: block; }
     </style>
   </head>
   <body>
@@ -49,12 +51,18 @@
     </div>
 
     <script>
-      // VK OAuth Callback Handler
-      // Получаем code из URL и отправляем его на backend для обмена на токен
-
       function getQueryParam(name) {
         const params = new URLSearchParams(window.location.search);
         return params.get(name);
+      }
+
+      function showMessage(icon, title, subtitle) {
+        const container = document.getElementById('container');
+        container.innerHTML = `
+          <span class="icon">${icon}</span>
+          <h1>${title}</h1>
+          <p>${subtitle}</p>
+        `;
       }
 
       async function handleCallback() {
@@ -62,74 +70,65 @@
         const state = getQueryParam('state');
         const error = getQueryParam('error');
         const errorReason = getQueryParam('error_reason');
-        const container = document.getElementById('container');
+        const isVkMiniApp = window.location.search.includes('vk_app_id');
 
+        // Обработка ошибок
         if (error) {
-          container.className = 'container error';
-          container.innerHTML = `
-            <div style="font-size: 48px; margin-bottom: 20px;">❌</div>
-            <h1>Ошибка авторизации</h1>
-            <p>${errorReason || error}</p>
-            <p style="margin-top: 20px; font-size: 12px;">Перенаправление через 3 секунды...</p>
-          `;
+          showMessage('❌', 'Ошибка авторизации', errorReason || error);
           setTimeout(() => {
-            window.location.href = '/';
+            if (window.opener && !window.opener.closed) {
+              window.close();
+            } else {
+              window.location.href = '/';
+            }
           }, 3000);
           return;
         }
 
         if (!code) {
-          container.className = 'container error';
-          container.innerHTML = `
-            <div style="font-size: 48px; margin-bottom: 20px;">❌</div>
-            <h1>Код не получен</h1>
-            <p>VK не вернул код авторизации</p>
-            <p style="margin-top: 20px; font-size: 12px;">Перенаправление через 3 секунды...</p>
-          `;
+          showMessage('❌', 'Код не получен', 'VK не вернул код авторизации');
           setTimeout(() => {
             window.location.href = '/';
           }, 3000);
           return;
         }
 
-        // Show success state
-        container.className = 'container success';
-        container.innerHTML = `
-          <div style="font-size: 48px; margin-bottom: 20px;">✅</div>
-          <h1>Авторизация успешна!</h1>
-          <p>Обмен кода на токен...</p>
-        `;
+        // Успешное получение кода
+        showMessage('✅', 'Авторизация успешна!', 'Обмен кода на токен...');
 
-        // Send code to backend via opener window (if popup) or directly
         try {
-          // Try to communicate with opener window
+          // Если открыто в popup
           if (window.opener && !window.opener.closed) {
             window.opener.postMessage({
               type: 'VK_OAUTH_CALLBACK',
               code: code,
               state: state,
             }, window.location.origin);
-            
+
             setTimeout(() => {
               window.close();
             }, 1000);
             return;
           }
 
-          // If not a popup, redirect to app with code
+          // Если это VK Mini App — используем postMessage для родителя
+          if (isVkMiniApp && window.parent !== window) {
+            window.parent.postMessage({
+              type: 'VK_OAUTH_CALLBACK',
+              code: code,
+              state: state,
+            }, '*');
+            return;
+          }
+
+          // Прямой редирект с кодом
           window.location.href = `/?vk_code=${encodeURIComponent(code)}`;
-          
+
         } catch (err) {
-          container.className = 'container error';
-          container.innerHTML = `
-            <div style="font-size: 48px; margin-bottom: 20px;">❌</div>
-            <h1>Ошибка обработки</h1>
-            <p>${err.message}</p>
-          `;
+          showMessage('❌', 'Ошибка обработки', err.message || 'Неизвестная ошибка');
         }
       }
 
-      // Handle on page load
       handleCallback();
     </script>
   </body>
